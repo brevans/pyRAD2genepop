@@ -1,17 +1,19 @@
 #!/usr/bin/env python
 from collections import defaultdict as dd
+import argparse
 
-def parse_pop_file(fn):
+def parse_pop_file(fh):
     '''
     read in a headerless file specifying individual -> population mapping
     return a dict thats keys are pop names, values are lists of individuals
     '''
     pops = dd(lambda : [])
-    with open(fn, 'r') as fh:
-        for l in fh:
-            (indiv, pop) = l.split()
-            pops[pop].append(indiv)
-    return(pops)
+    indivs = []
+    for l in fh:
+        (indiv, pop) = l.split()
+        pops[pop].append(indiv)
+        indivs.append(indiv)
+    return(pops, indivs)
 
 class Locus(object):
     '''
@@ -45,10 +47,11 @@ class Alleles_File(object):
     >sample1_1   TCATAAGTGACTGACTGACxxxxTCATACGGGACTGACTGAC
     //                -                        *           |
     '''
-    def __init__(self, fn):
+    def __init__(self, fh):
         '''
+        initialize starting variables
         '''
-        self.file_handle = open(fn, 'r')
+        self.file_handle = fh
         self.curr_loc = Locus()
         self.next_loc = self.get_next_locus()
 
@@ -85,14 +88,41 @@ class Alleles_File(object):
         else:
             raise StopIteration()
 
-if __name__ == '__main__':
-    popfile = 'pops.txt'
-    alleles_file = 'sample.alleles'
-
-    num_poly = 0
+def get_genepop_matrix(alleles_file, individuals):
+    gpop_field = '{:03d}' * 2
+    loci_names = []
+    hapmap = dd(lambda : [])
     for i, locus in enumerate(Alleles_File(alleles_file)):
-
         if locus.num_haplotypes > 1:
-            num_poly += 1
-            print("locus#:", i+1, "numpoly:", num_poly, "individuals:", locus.inds)
-    print("done.")
+            loci_names.append(str(i+1))
+            for ind in individuals:
+                if ind in locus.inds:
+                    hapmap[ind].append(gpop_field.format(locus.inds[ind][0],locus.inds[ind][1]))
+                else:
+                    hapmap[ind].append(gpop_field.format(0,0))
+    return(loci_names, hapmap)
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description="Given a pyRAD alleles file and individual -> populations assignment, generate a genepop file.")
+    parser.add_argument("-a","--alleles", help="Your alleles file.",
+                        type=argparse.FileType('r'), required=True)
+    parser.add_argument("-p","--pops", help="Populations assignment file. Must be white-space delimited, 2 columns. column 1: individual column 2: population",
+                        type=argparse.FileType('r'), required=True)
+    parser.add_argument("-o","--out", help="The name of the genepop file.",
+                        type=argparse.FileType('w'), required=True)
+    args = parser.parse_args()
+    
+    out = args.out
+    
+    populations, individuals = parse_pop_file(args.pops)
+
+    loci_names, haplotypes = get_genepop_matrix(args.alleles, individuals)
+    
+    out.write("haplotypes\n")
+    out.write('\n'.join(loci_names) + '\n')
+    for pop in sorted(populations):
+        out.write("POP\n")
+        for ind in populations[pop]:
+            out.write(ind + ' , ')
+            out.write(' '.join(haplotypes[ind]) + '\n')
