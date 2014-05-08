@@ -56,11 +56,16 @@ class Alleles_File(object):
         '''
         '''
         nl = Locus()
-        currline = self.file_handle.next()
-        while not currline.startswith("//"):
-            nl.add_ind(currline)
+        try:
             currline = self.file_handle.next()
-        return nl
+            while not currline.startswith("//"):
+                nl.add_ind(currline)
+                currline = self.file_handle.next()
+        finally:
+            if nl.num_haplotypes >0:
+                return nl
+            else:
+                return None
 
     def __iter__(self):
         return self
@@ -72,13 +77,13 @@ class Alleles_File(object):
     def next(self):
         '''
         '''
+        self.curr_loc = self.next_loc
         if self.curr_loc != None:
-            self.curr_loc = self.next_loc
+
             self.next_loc = self.get_next_locus()
             return self.curr_loc
         else:
             raise StopIteration()
-
 
 if __name__ == '__main__':
     popfile = 'pops.txt'
@@ -86,7 +91,8 @@ if __name__ == '__main__':
 
     num_poly = 0
     for i, locus in enumerate(Alleles_File(alleles_file)):
+
         if locus.num_haplotypes > 1:
             num_poly += 1
-            print("locus#:", i, "numpoly:", num_poly, "individuals:", locus.inds)
+            print("locus#:", i+1, "numpoly:", num_poly, "individuals:", locus.inds)
     print("done.")
